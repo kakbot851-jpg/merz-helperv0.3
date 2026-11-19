@@ -1,0 +1,62 @@
+name: Build Merz Helper
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Find project folder
+        shell: pwsh
+        run: |
+          if (Test-Path "merz_helper.py") {
+            $dir = "."
+          } elseif (Test-Path "Merz_Helper_GitHub/merz_helper.py") {
+            $dir = "Merz_Helper_GitHub"
+          } else {
+            throw "Не найден файл merz_helper.py"
+          }
+          "SOURCE_DIR=$dir" >> $env:GITHUB_ENV
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install libraries
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r "$env:SOURCE_DIR/requirements.txt"
+          python -m pip install pyinstaller
+
+      - name: Build EXE
+        shell: pwsh
+        run: |
+          Push-Location "$env:SOURCE_DIR"
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "Merz Helper" --collect-all pynput --collect-all pyperclip merz_helper.py
+          Pop-Location
+
+      - name: Prepare download
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item "$env:SOURCE_DIR/dist/Merz Helper.exe" package/
+          Compress-Archive -Path package/* -DestinationPath Merz-Helper-Windows.zip -Force
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: Merz-Helper-Windows
+          path: Merz-Helper-Windows.zip
+          retention-days: 30
